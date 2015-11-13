@@ -103,7 +103,16 @@ class SideMenu extends Component {
       const x = Math.round(Math.abs(gestureState.dx));
       const y = Math.round(Math.abs(gestureState.dy));
 
-      return x > this.props.toleranceX && y < this.props.toleranceY;
+      const touchMoved = x > this.props.toleranceX && y < this.props.toleranceY;
+      if (this.isOpen) {
+        return touchMoved;
+      } else {
+        const withinEdgeHitWidth = this.props.menuPosition === 'right' ?
+            gestureState.moveX > (deviceScreen.width - this.props.edgeHitWidth) :
+            gestureState.moveX < this.props.edgeHitWidth;
+        const swipingToOpen = (this.menuPositionMultiplier() * gestureState.dx) > 0;
+        return withinEdgeHitWidth && touchMoved && swipingToOpen;
+      }
     }
 
     return false;
@@ -165,9 +174,8 @@ class SideMenu extends Component {
     this.prevLeft = openOffset;
 
     if (!this.isOpen) {
-      this.props.onChange(this.isOpen);
-
       this.isOpen = true;
+      this.props.onChange(this.isOpen);
 
       // Force update to make the overlay appear (if touchToClose is set)
       if (this.props.touchToClose) {
@@ -191,9 +199,9 @@ class SideMenu extends Component {
     this.prevLeft = closeOffset;
 
     if (this.isOpen) {
+      this.isOpen = false;
       this.props.onChange(this.isOpen);
 
-      this.isOpen = false;
       // Force update to make the overlay disappear (if touchToClose is set)
       if (this.props.touchToClose) {
         this.forceUpdate();
@@ -228,13 +236,14 @@ class SideMenu extends Component {
       );
     }
 
+    const {width, height, left} = this.state;
     return (
       <Animated.View
-        style={[styles.frontView, this.props.animationStyle(this.state.left), ]}
+        style={[styles.frontView, {width, height, left}]}
         ref={(sideMenu) => this.sideMenu = sideMenu}
         {...this.responder.panHandlers}>
-        {this.props.children}
-        {overlay}
+       {this.props.children}
+       {overlay}
       </Animated.View>
     );
   }
@@ -252,13 +261,18 @@ class SideMenu extends Component {
     };
   }
 
+  onLayoutChange(e) {
+    const {width, height} = e.nativeEvent.layout;
+    this.setState({width, height});
+  }
+
   /**
    * Compose and render menu and content view
    * @return {React.Component}
    */
   render() {
     return (
-      <View style={styles.container}>
+      <View style={styles.container} onLayout={this.onLayoutChange.bind(this)}>
         <View style={styles.menu}>
           {this.props.menu}
         </View>
@@ -273,8 +287,10 @@ SideMenu.childContextTypes = {
 };
 
 SideMenu.propTypes = {
+  edgeHitWidth: React.PropTypes.number,
   toleranceX: React.PropTypes.number,
   toleranceY: React.PropTypes.number,
+  menuPosition: React.PropTypes.oneOf(['left', 'right']),
   onChange: React.PropTypes.func,
   touchToClose: React.PropTypes.bool,
   disableGestures: React.PropTypes.oneOfType([React.PropTypes.func, React.PropTypes.bool, ]),
@@ -285,6 +301,7 @@ SideMenu.propTypes = {
 SideMenu.defaultProps = {
   toleranceY: 10,
   toleranceX: 10,
+  edgeHitWidth: 60,
   touchToClose: false,
   onStartShouldSetResponderCapture: () => true,
   onChange: () => {},
